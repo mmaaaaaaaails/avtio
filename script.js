@@ -1,38 +1,51 @@
 (function() {
     'use strict';
 
-    console.log('🚀 Скрипт поиска ссылки Авито (v2) запущен!');
+    console.log('🚀 Скрипт поиска ссылки Авито (final) запущен!');
+
+    const fieldId = '11136';
+    let attempts = 0;
+    const maxAttempts = 10;
 
     function findAndCopyLink() {
-        const fieldId = '11136';
+        attempts++;
+
         let foundLink = null;
 
-        // 1. Пытаемся найти ссылку во всех фреймах на странице
-        const frames = document.querySelectorAll('iframe');
-        
-        frames.forEach((frame) => {
-            try {
-                // Заглядываем внутрь фрейма (если позволяет безопасность)
-                const frameDoc = frame.contentDocument || frame.contentWindow.document;
-                const linkInFrame = frameDoc.querySelector('a[href*="avito.ru"]');
-                if (linkInFrame) {
-                    foundLink = linkInFrame.href;
-                }
-            } catch (e) {
-                // Если фрейм с другого домена (CORS), мы не сможем прочитать его DOM напрямую
-            }
-        });
+        // 🔥 1. Самый надежный способ — ищем в HTML
+        const matches = document.body.innerHTML.match(/https?:\/\/[^\s"]*avito\.ru[^\s"]*/g);
 
-        // 2. Если во фреймах не нашли, ищем по всей странице (на случай если это не фрейм)
+        if (matches && matches.length) {
+            const cleanLinks = matches.map(link => link.replace(/&amp;/g, '&'));
+
+            // берем ссылку на объявление (исключаем профиль)
+            const adLink = cleanLinks.find(link => !link.includes('/profile'));
+
+            if (adLink) {
+                foundLink = adLink;
+            }
+        }
+
+        // 🔁 2. fallback — ищем в iframe (на всякий случай)
         if (!foundLink) {
-            const linkOnPage = document.querySelector('a[href*="avito.ru"]');
-            if (linkOnPage) foundLink = linkOnPage.href;
+            const frames = document.querySelectorAll('iframe');
+
+            frames.forEach((frame) => {
+                if (frame.src && frame.src.includes('avito.ru')) {
+                    foundLink = frame.src;
+                }
+            });
+        }
+
+        // 🔁 3. fallback — ищем обычные ссылки
+        if (!foundLink) {
+            const link = document.querySelector('a[href*="avito.ru"]');
+            if (link) foundLink = link.href;
         }
 
         if (foundLink) {
-            console.log('✅ Ссылка Авито найдена:', foundLink);
-            
-            // 3. Ищем поле в Омнидеске
+            console.log('✅ Найдена ссылка Авито:', foundLink);
+
             const field = document.querySelector(`[name="custom_fields[field_${fieldId}]"]`) || 
                           document.getElementById(`custom_field_${fieldId}`);
 
@@ -40,19 +53,22 @@
                 if (!field.value) {
                     field.value = foundLink;
                     field.dispatchEvent(new Event('change', { bubbles: true }));
-                    console.log('🎉 Ссылка вставлена в поле 11136!');
+                    console.log('🎉 Ссылка вставлена в поле!');
                 } else {
-                    console.log('ℹ️ Поле уже заполнено.');
+                    console.log('ℹ️ Поле уже заполнено');
                 }
             } else {
-                console.error('❌ Не нашли поле 11136, проверьте, открыт ли тикет.');
+                console.error('❌ Поле не найдено');
             }
+
+        } else if (attempts < maxAttempts) {
+            console.warn(`⏳ Попытка ${attempts}: ссылка не найдена, повтор через 3 сек...`);
+            setTimeout(findAndCopyLink, 3000);
         } else {
-            console.warn('⚠️ Ссылка Авито пока не появилась. Проверяю еще раз через 3 сек...');
-            setTimeout(findAndCopyLink, 3000); // Рекурсивный поиск
+            console.error('❌ Не удалось найти ссылку Авито');
         }
     }
 
-    // Запуск через 4 секунды (даем виджету время на загрузку)
+    // даем время виджету загрузиться
     setTimeout(findAndCopyLink, 4000);
 })();
