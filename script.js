@@ -1,4 +1,3 @@
-console.log('avito')
 
 (function() {
     'use strict';
