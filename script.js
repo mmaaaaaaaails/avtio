@@ -1,63 +1,56 @@
 (function() {
     'use strict';
 
-    console.log('🚀 Скрипт Авито (observer) запущен!');
-
     const fieldId = '11136';
 
-    function extractLink() {
+    // 🔥 Функция для поиска и вставки ссылки
+    function insertAvitoLink() {
         const matches = document.body.innerHTML.match(/https?:\/\/[^\s"]*avito\.ru[^\s"]*/g);
 
         if (matches && matches.length) {
             const cleanLinks = matches.map(link => link.replace(/&amp;/g, '&'));
-            return cleanLinks.find(link => !link.includes('/profile'));
-        }
-
-        return null;
-    }
-
-    function insertLink(link) {
-        const field = document.querySelector(`[name="custom_fields[field_${fieldId}]"]`) || 
-                      document.getElementById(`custom_field_${fieldId}`);
-
-        if (!field) {
-            console.warn('❌ Поле не найдено');
-            return false;
-        }
-
-        if (!field.value) {
-            field.value = link;
-            field.dispatchEvent(new Event('change', { bubbles: true }));
-            console.log('🎉 Ссылка вставлена:', link);
-        } else {
-            console.log('ℹ️ Поле уже заполнено');
-        }
-
-        return true;
-    }
-
-    function tryProcess() {
-        const link = extractLink();
-
-        if (link) {
-            console.log('✅ Найдена ссылка:', link);
-            if (insertLink(link)) {
-                observer.disconnect(); // останавливаем наблюдение
+            const adLink = cleanLinks.find(link => !link.includes('/profile'));
+            if (adLink) {
+                const field = document.querySelector(`[name="custom_fields[field_${fieldId}]"]`) ||
+                              document.getElementById(`custom_field_${fieldId}`);
+                if (field && !field.value) {
+                    field.value = adLink;
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
+                    console.log('🎉 Ссылка Авито вставлена:', adLink);
+                    return true;
+                }
             }
         }
+        return false;
     }
 
-    // 👀 Следим за изменениями DOM
-    const observer = new MutationObserver(() => {
-        tryProcess();
-    });
+    // 🔹 Патчим LazyLoadAvito, если есть
+    if (window.LazyLoadAvito) {
+        const original = window.LazyLoadAvito;
+        window.LazyLoadAvito = function(...args) {
+            const result = original.apply(this, args);
+            setTimeout(() => insertAvitoLink(), 500); // даём время вставить данные
+            return result;
+        };
+        console.log('✅ LazyLoadAvito патчен — ждём подгрузки данных...');
+    }
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
+    // 🔹 Патчим xajax_LoadAvitoInfo, если есть
+    if (window.xajax_LoadAvitoInfo) {
+        const original = window.xajax_LoadAvitoInfo;
+        window.xajax_LoadAvitoInfo = function(...args) {
+            const result = original.apply(this, args);
+            setTimeout(() => insertAvitoLink(), 500);
+            return result;
+        };
+        console.log('✅ xajax_LoadAvitoInfo патчен — ждём подгрузки данных...');
+    }
 
-    // первая попытка сразу
-    tryProcess();
+    // 🔹 Первая попытка сразу (на случай, если данные уже есть)
+    setTimeout(() => {
+        if (!insertAvitoLink()) {
+            console.log('⏳ Ссылка пока не найдена, ждём подгрузки виджета...');
+        }
+    }, 1000);
 
 })();
