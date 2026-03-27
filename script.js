@@ -1,74 +1,63 @@
 (function() {
     'use strict';
 
-    console.log('🚀 Скрипт поиска ссылки Авито (final) запущен!');
+    console.log('🚀 Скрипт Авито (observer) запущен!');
 
     const fieldId = '11136';
-    let attempts = 0;
-    const maxAttempts = 10;
 
-    function findAndCopyLink() {
-        attempts++;
-
-        let foundLink = null;
-
-        // 🔥 1. Самый надежный способ — ищем в HTML
+    function extractLink() {
         const matches = document.body.innerHTML.match(/https?:\/\/[^\s"]*avito\.ru[^\s"]*/g);
 
         if (matches && matches.length) {
             const cleanLinks = matches.map(link => link.replace(/&amp;/g, '&'));
-
-            // берем ссылку на объявление (исключаем профиль)
-            const adLink = cleanLinks.find(link => !link.includes('/profile'));
-
-            if (adLink) {
-                foundLink = adLink;
-            }
+            return cleanLinks.find(link => !link.includes('/profile'));
         }
 
-        // 🔁 2. fallback — ищем в iframe (на всякий случай)
-        if (!foundLink) {
-            const frames = document.querySelectorAll('iframe');
+        return null;
+    }
 
-            frames.forEach((frame) => {
-                if (frame.src && frame.src.includes('avito.ru')) {
-                    foundLink = frame.src;
-                }
-            });
+    function insertLink(link) {
+        const field = document.querySelector(`[name="custom_fields[field_${fieldId}]"]`) || 
+                      document.getElementById(`custom_field_${fieldId}`);
+
+        if (!field) {
+            console.warn('❌ Поле не найдено');
+            return false;
         }
 
-        // 🔁 3. fallback — ищем обычные ссылки
-        if (!foundLink) {
-            const link = document.querySelector('a[href*="avito.ru"]');
-            if (link) foundLink = link.href;
-        }
-
-        if (foundLink) {
-            console.log('✅ Найдена ссылка Авито:', foundLink);
-
-            const field = document.querySelector(`[name="custom_fields[field_${fieldId}]"]`) || 
-                          document.getElementById(`custom_field_${fieldId}`);
-
-            if (field) {
-                if (!field.value) {
-                    field.value = foundLink;
-                    field.dispatchEvent(new Event('change', { bubbles: true }));
-                    console.log('🎉 Ссылка вставлена в поле!');
-                } else {
-                    console.log('ℹ️ Поле уже заполнено');
-                }
-            } else {
-                console.error('❌ Поле не найдено');
-            }
-
-        } else if (attempts < maxAttempts) {
-            console.warn(`⏳ Попытка ${attempts}: ссылка не найдена, повтор через 3 сек...`);
-            setTimeout(findAndCopyLink, 3000);
+        if (!field.value) {
+            field.value = link;
+            field.dispatchEvent(new Event('change', { bubbles: true }));
+            console.log('🎉 Ссылка вставлена:', link);
         } else {
-            console.error('❌ Не удалось найти ссылку Авито');
+            console.log('ℹ️ Поле уже заполнено');
+        }
+
+        return true;
+    }
+
+    function tryProcess() {
+        const link = extractLink();
+
+        if (link) {
+            console.log('✅ Найдена ссылка:', link);
+            if (insertLink(link)) {
+                observer.disconnect(); // останавливаем наблюдение
+            }
         }
     }
 
-    // даем время виджету загрузиться
-    setTimeout(findAndCopyLink, 4000);
+    // 👀 Следим за изменениями DOM
+    const observer = new MutationObserver(() => {
+        tryProcess();
+    });
+
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    // первая попытка сразу
+    tryProcess();
+
 })();
