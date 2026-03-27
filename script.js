@@ -1,47 +1,58 @@
-
 (function() {
     'use strict';
 
-    console.log('🚀 Скрипт для Авито (поле 11136) запущен!');
+    console.log('🚀 Скрипт поиска ссылки Авито (v2) запущен!');
 
-    function processAvitoLink() {
+    function findAndCopyLink() {
         const fieldId = '11136';
+        let foundLink = null;
+
+        // 1. Пытаемся найти ссылку во всех фреймах на странице
+        const frames = document.querySelectorAll('iframe');
         
-        // 1. Ищем ссылку Авито
-        const avitoLinkElement = document.querySelector('a[href*="avito.ru"]');
-        
-        if (!avitoLinkElement) {
-            console.warn('⚠️ Виджет Авито со ссылкой пока не найден на странице.');
-            return;
+        frames.forEach((frame) => {
+            try {
+                // Заглядываем внутрь фрейма (если позволяет безопасность)
+                const frameDoc = frame.contentDocument || frame.contentWindow.document;
+                const linkInFrame = frameDoc.querySelector('a[href*="avito.ru"]');
+                if (linkInFrame) {
+                    foundLink = linkInFrame.href;
+                }
+            } catch (e) {
+                // Если фрейм с другого домена (CORS), мы не сможем прочитать его DOM напрямую
+            }
+        });
+
+        // 2. Если во фреймах не нашли, ищем по всей странице (на случай если это не фрейм)
+        if (!foundLink) {
+            const linkOnPage = document.querySelector('a[href*="avito.ru"]');
+            if (linkOnPage) foundLink = linkOnPage.href;
         }
 
-        const link = avitoLinkElement.href;
-        console.log('✅ Ссылка Авито найдена:', link);
-
-        // 2. Ищем кастомное поле в Омнидеске
-        // Омнидеск часто использует ID вида "custom_field_11136" или имя "custom_fields[field_11136]"
-        const field = document.querySelector(`[name="custom_fields[field_${fieldId}]"]`) || 
-                      document.getElementById(`custom_field_${fieldId}`);
-
-        if (field) {
-            console.log('🔍 Кастомное поле 11136 обнаружено.');
+        if (foundLink) {
+            console.log('✅ Ссылка Авито найдена:', foundLink);
             
-            if (!field.value) {
-                field.value = link;
-                // Уведомляем систему об изменении, чтобы кнопка "Сохранить" стала активной
-                field.dispatchEvent(new Event('change', { bubbles: true }));
-                field.dispatchEvent(new Event('input', { bubbles: true }));
-                
-                console.log('🎉 Ссылка успешно вставлена в поле!');
+            // 3. Ищем поле в Омнидеске
+            const field = document.querySelector(`[name="custom_fields[field_${fieldId}]"]`) || 
+                          document.getElementById(`custom_field_${fieldId}`);
+
+            if (field) {
+                if (!field.value) {
+                    field.value = foundLink;
+                    field.dispatchEvent(new Event('change', { bubbles: true }));
+                    console.log('🎉 Ссылка вставлена в поле 11136!');
+                } else {
+                    console.log('ℹ️ Поле уже заполнено.');
+                }
             } else {
-                console.log('ℹ️ В поле уже есть значение, перезапись не требуется.');
+                console.error('❌ Не нашли поле 11136, проверьте, открыт ли тикет.');
             }
         } else {
-            console.error(`❌ Ошибка: Не удалось найти поле с ID ${fieldId} в интерфейсе.`);
+            console.warn('⚠️ Ссылка Авито пока не появилась. Проверяю еще раз через 3 сек...');
+            setTimeout(findAndCopyLink, 3000); // Рекурсивный поиск
         }
     }
 
-    // Запускаем проверку через 3 секунды, чтобы интерфейс Омнидеска и виджеты успели прогрузиться
-    console.log('⏳ Ожидание загрузки интерфейса...');
-    setTimeout(processAvitoLink, 3000);
+    // Запуск через 4 секунды (даем виджету время на загрузку)
+    setTimeout(findAndCopyLink, 4000);
 })();
