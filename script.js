@@ -1,55 +1,63 @@
+/**
+ * Скрипт для автоматического заполнения кастомного поля Омнидеска ссылкой на объявление Авито.
+ */
 (function() {
     'use strict';
 
-    // Проверяем, что мы на странице конкретного обращения
-    if (!document.querySelector('.case-view') && !document.querySelector('.case-detail')) {
-        console.log('⚠️ Скрипт Авито пропущен — не на странице обращения');
-        return;
-    }
+    const fieldId = '11136';
+    console.log(`[Avito-Linker] Скрипт запущен. Ожидаем появления данных... (ID поля: ${fieldId})`);
 
-    const fieldId = '11136';          // ID кастомного поля "Ссылка на объявление"
-    const checkInterval = 1500;       // интервал проверки в мс
-    const maxAttempts = 40;           // максимум попыток (~1 мин)
-    let attempts = 0;
+    function processAvitoLink() {
+        // 1. Пытаемся извлечь ссылку из всего HTML страницы
+        const matches = document.body.innerHTML.match(/https?:\/\/(www\.)?avito\.ru\/[^\s"']+/g);
+        const link = matches ? matches.find(l => !l.includes('/profile')) : null;
 
-    // функция поиска ссылки Авито в DOM
-    function extractAvitoLink() {
-        const matches = document.body.innerHTML.match(/https?:\/\/[^\s"]*avito\.ru[^\s"]*/g);
-        if (!matches) return null;
-        const cleanLinks = matches.map(link => link.replace(/&amp;/g, '&'));
-        return cleanLinks.find(link => !link.includes('/profile'));
-    }
+        if (!link) {
+            // Не пишем лог на каждую итерацию, чтобы не спамить консоль
+            return false; 
+        }
 
-    // функция вставки ссылки в кастомное поле
-    function insertLink(link) {
-        const field = document.querySelector(`[name="custom_fields[field_${fieldId}]"]`) ||
-                      document.getElementById(`custom_field_${fieldId}`);
-        if (!field) return false;
+        console.log('[Avito-Linker] Найдена подходящая ссылка:', link);
 
+        // 2. Ищем поле ввода
+        const field = document.getElementById(`field_${fieldId}`) || 
+                      document.querySelector(`[name="field_${fieldId}"]`) ||
+                      document.querySelector(`[name="fields[${fieldId}]"]`);
+
+        if (!field) {
+            console.warn(`[Avito-Linker] ⚠️ Ссылка есть, но поле field_${fieldId} еще не отрисовано в DOM.`);
+            return false;
+        }
+
+        // 3. Проверяем значение и вставляем
         if (!field.value) {
             field.value = link;
+            // Триггерим события, чтобы система поняла, что данные изменились
+            field.dispatchEvent(new Event('input', { bubbles: true }));
             field.dispatchEvent(new Event('change', { bubbles: true }));
-            console.log('🎉 Ссылка Авито вставлена в поле:', link);
+            
+            console.log('%c[Avito-Linker] ✅ УСПЕХ: Ссылка вставлена в поле!', 'color: #2ecc71; font-weight: bold;');
+            return true; // Можно отключать наблюдение
         } else {
-            console.log('ℹ️ Поле уже заполнено:', field.value);
+            console.log('[Avito-Linker] ℹ️ Поле уже заполнено значением:', field.value);
+            return true; // Считаем задачу выполненной
         }
-        return true;
     }
 
-    // основной цикл проверки
-    const intervalId = setInterval(() => {
-        attempts++;
-        const link = extractAvitoLink();
-        if (link) {
-            insertLink(link);
-            clearInterval(intervalId);
-            console.log('✅ Авто-подстановка завершена');
-        } else if (attempts >= maxAttempts) {
-            clearInterval(intervalId);
-            console.warn('❌ Ссылка Авито не найдена после ожидания');
-        } else {
-            console.log(`⏳ Попытка ${attempts}: ссылка ещё не появилась, ждем...`);
+    // Используем MutationObserver для динамических страниц (SPA)
+    const observer = new MutationObserver(() => {
+        if (processAvitoLink()) {
+            console.log('[Avito-Linker] Работа завершена, отключаю наблюдатель.');
+            observer.disconnect();
         }
-    }, checkInterval);
+    });
 
+    // Запускаем слежку за изменениями в DOM
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+
+    // На всякий случай запускаем проверку один раз сразу
+    processAvitoLink();
 })();
